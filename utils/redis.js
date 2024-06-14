@@ -17,10 +17,10 @@ class RedisClient {
       console.log(`Redis client not connected to the server: ${err}`);
     });
 
-    // promisify redis methods to use async/await
-    this.getAsync = promisify(this.client.get).bind(this.client);
-    this.setAsync = promisify(this.client.set).bind(this.client);
-    this.delAsync = promisify(this.client.del).bind(this.client);
+    // added log successful connection to Redis server
+    this.client.on('connect', () => {
+      console.log('Redis client connected to the server');
+    });
   }
 
   /**
@@ -41,7 +41,8 @@ class RedisClient {
    * @returns {Promise<string|null} - The value associated with the key, null if key not found.
    */
   async get(key) {
-    const getValue = await this.getAsync(key);
+    const getAsync = promisify(this.client.get).bind(this.client);
+    const getValue = await getAsync(key);
     return getValue;
   }
 
@@ -53,7 +54,9 @@ class RedisClient {
    * @returns {Promise<void>} - Promise that resolves when the operation is complete.
    */
   async set(key, value, duration) {
-    await this.setAsync(key, value, 'EX', duration);
+    const setAsync = promisify(this.client.set).bind(this.client);
+    await setAsync(key, value);
+    await this.client.expire(key, duration);
   }
 
   /**
@@ -62,8 +65,8 @@ class RedisClient {
    * @returns {Promise<number>} - The number of keys that were deleted.
    */
   async del(key) {
-    const delValue = await this.delAsync(key);
-    return delValue;
+    const delAsync = promisify(this.client.del).bind(this.client);
+    await delAsync(key);
   }
 }
 
