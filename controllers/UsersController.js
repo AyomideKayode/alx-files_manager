@@ -1,7 +1,9 @@
 // controllers/UsersController.js
 import sha1 from 'sha1';
 import dbClient from '../utils/db';
-// import { ObjectId } from 'mongodb';
+import redisClient from '../utils/redis';
+
+const { ObjectId } = require('mongodb');
 
 class UsersController {
   // Method to handle the creation of a new user
@@ -35,6 +37,39 @@ class UsersController {
 
     // Return the created user's id and email
     return res.status(201).json({ id: result.insertedId, email });
+  }
+
+  // Static method to handle fetching the authenticated user's details
+  static async getMe(req, res) {
+    // Extract the token from the 'x-token' header
+    const token = req.headers['x-token'];
+
+    // Check if the token is missing
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' }); // Respond with a 401 status and an error message
+    }
+
+    // Create a key for the token stored in Redis
+    const tokenKey = `auth_${token}`;
+    // Retrieve the user ID associated with the token from Redis
+    const userId = await redisClient.get(tokenKey);
+
+    // Check if no user ID was found for the provided token
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' }); // respond 401 status and an error message
+    }
+    // search for the user in the database using the retrieved user ID
+    const user = await dbClient.db
+      .collection('users')
+      .findOne({ _id: ObjectId(userId) });
+
+    if (!user) {
+      // check if no user found with the provided user ID
+      return res.status(401).json({ error: 'Unauthorized' }); // respond 401 status anderror message
+    }
+
+    // respond 200 status and the user's id and email
+    return res.status(200).json({ id: user._id, email: user.email });
   }
 }
 
