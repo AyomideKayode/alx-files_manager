@@ -5,6 +5,7 @@ const app = express();
 const port = parseInt(process.env.PORT, 10) || 5000;
 
 // load routes from the routes folder
+app.use(express.json()); // parse incoming requests with JSON payloads (UserController.js)
 app.use('/', router);
 
 // start the server
