@@ -472,7 +472,7 @@ Hello Webstack!
 bob@dylan:~$
 ```
 
-### 9. Image Thumbnails | [SOON](./) :-
+### 9. [Image Thumbnails](./controllers/FilesController.js) :-
 
 Update the endpoint `POST /files` endpoint to start a background processing for generating thumbnails for a file of type `image`:
 
@@ -522,6 +522,3 @@ bob@dylan:~$ curl -XGET 0.0.0.0:5000/files/5f1e8896c7ba06511e683b25/data?size=25
 new_image.png: PNG image data, 250 x 272, 8-bit/color RGBA, non-interlaced
 bob@dylan:~$
 ```
-
-| Task | File |
-| ---- | ---- |
