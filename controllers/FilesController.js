@@ -178,6 +178,94 @@ class FilesController {
     // Respond with a 200 status and the list of files
     return res.status(200).json(files);
   }
+
+  static async putPublish(req, res) {
+    // extract the token from the 'x-token' header
+    const token = req.headers['x-token'];
+    // check if the token is missing
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' }); // respond with 401 and an error message
+    }
+
+    // create a key for the token stored in Redis
+    const tokenKey = `auth_${token}`;
+    // get the user ID linked with the token from Redis
+    const userId = await redisClient.get(tokenKey);
+    // check if no user ID was found for the provided token
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' }); // respond with 401 and an error message
+    }
+
+    // extract the file ID from the request parameters
+    const fileId = req.params.id;
+    // search for the file in the database using the file ID and user ID
+    const file = await dbClient.db
+      .collection('files')
+      .findOne({ _id: ObjectId(fileId), userId: ObjectId(userId) });
+    // check if no file was found
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' }); // respond with 404 and an error message
+    }
+
+    // update the file's isPublic property to true
+    await dbClient.db
+      .collection('files')
+      .updateOne(
+        { _id: ObjectId(fileId), userId: ObjectId(userId) },
+        { $set: { isPublic: true } },
+      );
+
+    // retrieve the updated file from the database
+    const updatedFile = await dbClient.db
+      .collection('files')
+      .findOne({ _id: ObjectId(fileId) });
+    // respond with 200 and the updated file
+    return res.status(200).json(updatedFile);
+  }
+
+  static async putUnpublish(req, res) {
+    // extract the token from the 'x-token' header
+    const token = req.headers['x-token'];
+    // check if the token is missing
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized' }); // respond with 401 and an error message
+    }
+
+    // create a key for the token stored in Redis
+    const tokenKey = `auth_${token}`;
+    // get the user ID linked with the token from Redis
+    const userId = await redisClient.get(tokenKey);
+    // check if no user ID was found for the provided token
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' }); // respond with 401 and an error message
+    }
+
+    // extract the file ID from the request parameters
+    const fileId = req.params.id;
+    // search for the file in the database using the file ID and user ID
+    const file = await dbClient.db
+      .collection('files')
+      .findOne({ _id: ObjectId(fileId), userId: ObjectId(userId) });
+    // check if no file was found
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' }); // respond with 404 and an error message
+    }
+
+    // update the file's isPublic property to false
+    await dbClient.db
+      .collection('files')
+      .updateOne(
+        { _id: ObjectId(fileId), userId: ObjectId(userId) },
+        { $set: { isPublic: false } },
+      );
+
+    // retrieve the updated file from the database
+    const updatedFile = await dbClient.db
+      .collection('files')
+      .findOne({ _id: ObjectId(fileId) });
+    // respond with 200 and the updated file
+    return res.status(200).json(updatedFile);
+  }
 }
 
 // Export the FilesController class
