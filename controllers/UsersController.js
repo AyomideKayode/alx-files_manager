@@ -1,9 +1,12 @@
 // controllers/UsersController.js
 import sha1 from 'sha1';
+import Queue from 'bull';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
 
 const { ObjectId } = require('mongodb');
+// Create a Bull queue for user welcome emails
+const userQueue = new Queue('userQueue');
 
 class UsersController {
   // Method to handle the creation of a new user
@@ -34,6 +37,11 @@ class UsersController {
     const result = await dbClient.db
       .collection('users')
       .insertOne({ email, password: hashedPassword });
+
+    const newUserId = result.insertedId;
+
+    // Add a job to the queue with the new user ID
+    await userQueue.add({ userId: newUserId });
 
     // Return the created user's id and email
     return res.status(201).json({ id: result.insertedId, email });
