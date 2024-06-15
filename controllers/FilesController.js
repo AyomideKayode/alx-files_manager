@@ -5,8 +5,11 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { ObjectId } from 'mongodb';
 import mime from 'mime-types';
+import Queue from 'bull';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
+
+const fileQueue = new Queue('fileQueue');
 
 class FilesController {
   // Static method to handle file upload
@@ -87,17 +90,20 @@ class FilesController {
     await fsPromises.mkdir(folderPath, { recursive: true });
     // convert the base64 data to a buffer
     const fileData = Buffer.from(data, 'base64');
-
     // write the file to the local path
     await fsPromises.writeFile(localPath, fileData);
 
     // add the local path to the file document
     fileDocument.localPath = localPath;
-
     // insert the document into the database and return the response
     const result = await dbClient.db
       .collection('files')
       .insertOne(fileDocument);
+
+    if (type === 'image') {
+      fileQueue.add({ userId, fileId: result.insertedId.toString() });
+    }
+
     return res.status(201).json({ id: result.insertedId, ...fileDocument });
   }
 
@@ -110,13 +116,11 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' }); // respond with 401 and an error message
     }
 
-    // create a key for the token stored in Redis
-    const tokenKey = `auth_${token}`;
-    // get the user ID linked with the token from Redis
-    const userId = await redisClient.get(tokenKey);
+    const tokenKey = `auth_${token}`; // create a key for the token stored in Redis
+    const userId = await redisClient.get(tokenKey); // get user ID linked with the token from Redis
 
-    // check if no user ID was found for the provided token
     if (!userId) {
+      // check if no user ID was found for the provided token
       return res.status(401).json({ error: 'Unauthorized' }); // respond with 401 status and an error message
     }
 
@@ -131,7 +135,6 @@ class FilesController {
     if (!file) {
       return res.status(404).json({ error: 'Not found' }); // Respond with a 404 status and an error message
     }
-
     // Respond with a 200 status and the file details
     return res.status(200).json(file);
   }
@@ -268,10 +271,8 @@ class FilesController {
   }
 
   static async getFile(req, res) {
-    // extract the file ID from the request parameters
-    const fileId = req.params.id;
-    // extract the token from the 'x-token' header
-    const token = req.headers['x-token'];
+    const fileId = req.params.id; // extract the file ID from the request parameters
+    const token = req.headers['x-token']; // extract the token from the 'x-token' header
 
     // search for file in the database using the file ID
     const file = await dbClient.db
@@ -298,7 +299,14 @@ class FilesController {
     }
 
     // get the file path from the file document
-    const filePath = file.localPath;
+    let filePath = file.localPath;
+    const { size } = req.query; // extract the 'size' query parameter from the request
+    // check if the 'size' parameter is provided and is a valid value
+    if (size && ['100', '250', '500'].includes(size)) {
+      // append the size to the file path to get the resized file path
+      filePath = `${file.localPath}_${size}`;
+    }
+
     try {
       // read the file data from the file path
       const fileData = await fsPromises.readFile(filePath);
