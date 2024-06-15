@@ -4,9 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { promises as fsPromises } from 'fs';
 import path from 'path';
 import { ObjectId } from 'mongodb';
+import mime from 'mime-types';
 import dbClient from '../utils/db';
 import redisClient from '../utils/redis';
-// import mime from 'mime-types';
 
 class FilesController {
   // Static method to handle file upload
@@ -265,6 +265,52 @@ class FilesController {
       .findOne({ _id: ObjectId(fileId) });
     // respond with 200 and the updated file
     return res.status(200).json(updatedFile);
+  }
+
+  static async getFile(req, res) {
+    // extract the file ID from the request parameters
+    const fileId = req.params.id;
+    // extract the token from the 'x-token' header
+    const token = req.headers['x-token'];
+
+    // search for file in the database using the file ID
+    const file = await dbClient.db
+      .collection('files')
+      .findOne({ _id: ObjectId(fileId) });
+    // check if no file was found
+    if (!file) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // extract the 'isPublic' property from the file
+    const { isPublic } = file;
+    // get user ID associated with the token from Redis
+    const userId = token ? await redisClient.get(`auth_${token}`) : null;
+
+    // check if the file is not public and the user is not the owner
+    if (!isPublic && (!userId || userId !== file.userId.toString())) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    // Check if the file is a folder
+    if (file.type === 'folder') {
+      return res.status(400).json({ error: "A folder doesn't have content" });
+    }
+
+    // get the file path from the file document
+    const filePath = file.localPath;
+    try {
+      // read the file data from the file path
+      const fileData = await fsPromises.readFile(filePath);
+      // Determine the MIME type of the file
+      const mimeType = mime.lookup(file.name) || 'application/octet-stream';
+      // Set the 'Content-Type' header of the response
+      res.setHeader('Content-Type', mimeType);
+      // Return the file data in the response body
+      return res.status(200).send(fileData);
+    } catch (err) {
+      return res.status(404).json({ error: 'Not found' });
+    }
   }
 }
 
